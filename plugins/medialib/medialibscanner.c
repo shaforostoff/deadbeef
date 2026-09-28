@@ -259,7 +259,7 @@ scanner_thread (medialib_source_t *source, ml_scanner_configuration_t conf) {
     int plt_track_count = deadbeef->plt_get_item_count (scanner.plt, PL_MAIN);
     if (scanner.track_count + plt_track_count > scanner.track_reserved_count) {
         scanner.track_reserved_count = scanner.track_count + plt_track_count;
-        scanner.tracks = realloc(scanner.tracks, scanner.track_reserved_count * sizeof (ddb_playItem_t));
+        scanner.tracks = realloc(scanner.tracks, scanner.track_reserved_count * sizeof (ddb_playItem_t *));
         if (scanner.tracks == NULL) {
             trace ("medialib: failed to allocate memory for tracks\n");
             goto error;
