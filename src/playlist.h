@@ -49,20 +49,23 @@ typedef struct playItem_s {
     int32_t endsample;
     int32_t shufflerating; // sort order for shuffle mode
 
+    // private area, must not be visible to plugins
+    // NOTE: the fields are ordered to avoid padding
+    float _duration;
     int64_t startsample64;
     int64_t endsample64;
-    // private area, must not be visible to plugins
-    float _duration;
     uint32_t _flags;
     int _refc;
-    struct playItem_s *next[PL_MAX_ITERATORS]; // next item in linked list
-    struct playItem_s *prev[PL_MAX_ITERATORS]; // prev item in linked list
-    struct DB_metaInfo_s *meta; // linked list storing metainfo
     unsigned selected : 1;
     unsigned played : 1; // mark as played in shuffle mode
     unsigned in_playlist : 1; // 1 if item is in playlist
     unsigned has_startsample64 : 1;
     unsigned has_endsample64 : 1;
+    uint32_t _meta_block_count; // number of nodes in _meta_block
+    struct playItem_s *next[PL_MAX_ITERATORS]; // next item in linked list
+    struct playItem_s *prev[PL_MAX_ITERATORS]; // prev item in linked list
+    struct DB_metaInfo_s *meta; // linked list storing metainfo
+    struct DB_metaInfo_s *_meta_block; // metainfo nodes allocated as a single block by pl_meta_pack
 } playItem_t;
 
 typedef struct playlist_s {

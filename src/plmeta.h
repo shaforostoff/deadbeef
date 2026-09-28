@@ -90,6 +90,17 @@ pl_meta_free_values (DB_metaInfo_t *meta);
 void
 pl_add_meta_copy (playItem_t *it, DB_metaInfo_t *meta);
 
+/// Free the metainfo node, which must already be unlinked from the item's list.
+/// Doesn't release the key and value.
+void
+pl_meta_free_node (playItem_t *it, DB_metaInfo_t *meta);
+
+/// Move all metainfo nodes of the item into a single contiguous block,
+/// to reduce the number of small allocations and heap fragmentation.
+/// Invalidates all DB_metaInfo_t pointers of the item.
+void
+pl_meta_pack (playItem_t *it);
+
 #ifdef __cplusplus
 }
 #endif

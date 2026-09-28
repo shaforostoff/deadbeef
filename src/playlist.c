@@ -1831,6 +1831,8 @@ plt_insert_item (playlist_t *playlist, playItem_t *after, playItem_t *it) {
     assert(it->prev[PL_SEARCH] == NULL);
     undo_insert_items(ddb_undomanager_get_buffer(ddb_undomanager_shared()), playlist, &it, 1);
     pl_item_ref (it);
+    // the metadata is normally complete at this point, so it's a good time to pack it
+    pl_meta_pack (it);
     if (!after) {
         it->next[PL_MAIN] = playlist->head[PL_MAIN];
         it->prev[PL_MAIN] = NULL;
@@ -1931,8 +1933,9 @@ pl_item_free (playItem_t *it) {
             pl_meta_free_values (it->meta);
             DB_metaInfo_t *m = it->meta;
             it->meta = m->next;
-            free (m);
+            pl_meta_free_node (it, m);
         }
+        free (it->_meta_block);
 
         free (it);
     }

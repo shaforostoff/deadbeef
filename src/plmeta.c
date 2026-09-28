@@ -111,6 +111,61 @@ pl_meta_free_values (DB_metaInfo_t *meta) {
     meta->valuesize = 0;
 }
 
+static int
+_meta_is_in_block (playItem_t *it, DB_metaInfo_t *meta) {
+    return it->_meta_block != NULL && meta >= it->_meta_block && meta < it->_meta_block + it->_meta_block_count;
+}
+
+void
+pl_meta_free_node (playItem_t *it, DB_metaInfo_t *meta) {
+    // nodes in the block are freed together with the block
+    if (!_meta_is_in_block (it, meta)) {
+        free (meta);
+    }
+}
+
+void
+pl_meta_pack (playItem_t *it) {
+    pl_lock ();
+    uint32_t count = 0;
+    int has_loose_nodes = 0;
+    for (DB_metaInfo_t *m = it->meta; m; m = m->next) {
+        count++;
+        if (!_meta_is_in_block (it, m)) {
+            has_loose_nodes = 1;
+        }
+    }
+
+    // already packed, and no nodes were deleted since
+    if (!has_loose_nodes && count == it->_meta_block_count) {
+        pl_unlock ();
+        return;
+    }
+
+    DB_metaInfo_t *block = NULL;
+    if (count > 0) {
+        block = malloc (count * sizeof (DB_metaInfo_t));
+        if (block == NULL) {
+            pl_unlock ();
+            return;
+        }
+        DB_metaInfo_t *m = it->meta;
+        for (uint32_t i = 0; i < count; i++) {
+            DB_metaInfo_t *next = m->next;
+            block[i] = *m;
+            block[i].next = next ? &block[i+1] : NULL;
+            pl_meta_free_node (it, m);
+            m = next;
+        }
+    }
+
+    free (it->_meta_block);
+    it->_meta_block = block;
+    it->_meta_block_count = count;
+    it->meta = block;
+    pl_unlock ();
+}
+
 DB_metaInfo_t *
 pl_add_empty_meta_for_key (playItem_t *it, const char *key) {
     // check if it's already set
@@ -376,7 +431,7 @@ pl_delete_meta (playItem_t *it, const char *key) {
             }
             metacache_remove_string (m->key);
             pl_meta_free_values(m);
-            free (m);
+            pl_meta_free_node (it, m);
             break;
         }
         prev = m;
@@ -473,7 +528,7 @@ pl_delete_metadata (playItem_t *it, DB_metaInfo_t *meta) {
             }
             metacache_remove_string (m->key);
             pl_meta_free_values(m);
-            free (m);
+            pl_meta_free_node (it, m);
             break;
         }
         prev = m;
@@ -501,7 +556,7 @@ pl_delete_all_meta (playItem_t *it) {
             }
             metacache_remove_string (m->key);
             pl_meta_free_values (m);
-            free (m);
+            pl_meta_free_node (it, m);
         }
         m = next;
     }
