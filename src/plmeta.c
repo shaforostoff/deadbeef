@@ -193,18 +193,25 @@ pl_add_empty_meta_for_key (playItem_t *it, const char *key) {
     // add
     m = calloc (1, sizeof (DB_metaInfo_t));
 
-    char *lc_key = strdup(key);
+    if (*key == ':') {
+        m->key = metacache_add_string (key);
+    }
+    else {
+        // keys are short, so avoid the heap in the common case
+        char lc_key_buf[256];
+        size_t keysize = strlen (key) + 1;
+        char *lc_key = keysize <= sizeof (lc_key_buf) ? lc_key_buf : malloc (keysize);
 
-    if (*key != ':') {
-        for (char *p = lc_key; *p; p++) {
-            *p = (char)tolower(*p);
+        for (size_t i = 0; i < keysize; i++) {
+            lc_key[i] = (char)tolower(key[i]);
+        }
+
+        m->key = metacache_add_string (lc_key);
+
+        if (lc_key != lc_key_buf) {
+            free (lc_key);
         }
     }
-
-    m->key = metacache_add_string (lc_key);
-
-    free (lc_key);
-    lc_key = NULL;
 
     if (key[0] == ':' || key[0] == '_' || key[0] == '!') {
         if (tail) {
@@ -227,28 +234,23 @@ pl_add_empty_meta_for_key (playItem_t *it, const char *key) {
     return m;
 }
 
-static char *
-_strip_empty (const char *value, int size, int *outsize) {
-    char *data = malloc (size);
-    if (!data) {
-        return NULL;
-    }
-
-    *outsize = 0;
+// Copy the multivalue into out, which must be at least size bytes, skipping empty parts.
+// Returns the size of the result.
+static int
+_strip_empty (const char *value, int size, char *out) {
+    int outsize = 0;
     const char *p = value;
     const char *e = value + size;
-    char *out = data;
     while (p < e) {
         size_t l = strlen (p) + 1;
         if (l > 1) {
-            memcpy (out, p, l);
-            out += l;
-            *outsize += l;
+            memcpy (out + outsize, p, l);
+            outsize += l;
         }
         p += l;
     }
 
-    return data;
+    return outsize;
 }
 
 static void
@@ -256,7 +258,10 @@ _meta_set_value (DB_metaInfo_t *m, const char *value, int size) {
     size_t len = strlen (value) + 1;
     if (len != size) {
         // multivalue -- need to strip empty parts
-        char *data = _strip_empty (value, size, &m->valuesize);
+        // most values are short, so avoid the heap in the common case
+        char buf[1024];
+        char *data = (size_t)size <= sizeof (buf) ? buf : malloc (size);
+        m->valuesize = data != NULL ? _strip_empty (value, size, data) : 0;
 
         if (m->valuesize > 0) {
             m->value = metacache_add_value (data, m->valuesize);
@@ -265,7 +270,9 @@ _meta_set_value (DB_metaInfo_t *m, const char *value, int size) {
             m->value = metacache_add_value ("", 1);
             m->valuesize = 1;
         }
-        free (data);
+        if (data != buf) {
+            free (data);
+        }
     }
     else {
         m->value = metacache_add_value (value, size);
